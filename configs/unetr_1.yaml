@@ -1,0 +1,48 @@
+train_dir: 
+test_dir:
+dataset_name: 
+model_dir: 
+model_name: 
+device:
+log:
+test_or_train:
+model_parameters: {
+  "in_channels":,
+  "out_channels":,
+  "img_size": ,
+  "feature_size":,
+  "hidden_size":,
+  "mlp_dim":,
+  "num_heads":,
+  "pos_embed":,
+  "norm_name":,
+  "conv_block":,
+  "res_block":,
+  "dropout_rate":,
+  "spatial_dims":,
+}
+training_parameters: {
+  "train_val_split":
+  "learning_rate":
+  "optimizer":
+  "activation":
+  "loss_fn":
+  "dropout":
+  "num_epochs":
+  "batch_size":
+}
+testing_parameters: {
+  "model_path":
+  "loss_fn":
+  "metric":
+}
+save_model: {
+  "save":
+  "model_name":
+}
+wandb: {
+  "project":
+  "entity":
+  "config":
+  "fields":
+}
