@@ -1,3 +1,4 @@
+from turtle import pos
 import torch
 import data_setup, engine, models, utils
 import sys
@@ -16,13 +17,6 @@ MODEL_DIR = config["model_dir"]
 # model and dset
 DATASET = config["dataset_name"]
 MODEL = config["model_name"]
-
-# model params
-NUM_CLASSES = config["model_parameters"]["num_classes"]
-IN_CHANNELS = config["model_parameters"]["in_channels"]
-DEPTH = config["model_parameters"]["depth"]
-SEED_FILTERS = config["model_parameters"]["seed_filters"]
-
 DEVICE = config["device"]
 
 # training params
@@ -63,11 +57,22 @@ WANDB_PARAMS = {
 }
 
 if config["test_or_train"]:
-    model = models.UNet(
-        num_classes=NUM_CLASSES,
-        in_channels=IN_CHANNELS,
-        depth=DEPTH,
-        seed_filters=SEED_FILTERS).to(DEVICE)
+    model = models.UNETR(
+        in_channels=config["model_parameters"]["in_channels"],
+        out_channels=config["model_parameters"]["out_channels"],
+        img_size=config["model_parameters"]["img_size"],
+        feature_size=config["model_parameters"]["feature_size"],
+        hidden_size=config["model_parameters"]["hidden_size"],
+        mlp_dim=config["model_parameters"]["mlp_dim"],
+        num_heads=config["model_parameters"]["num_heads"],
+        pos_embed=config["model_parameters"]["pos_embed"],
+        norm_name=config["model_parameters"]["norm_name"],
+        conv_block=config["model_parameters"]["conv_block"],
+        res_block=config["model_parameters"]["res_block"],
+        dropout_rate=config["model_parameters"]["dropout_rate"],
+        spatial_dims=config["model_parameters"]["spatial_dims"]
+    ).to(DEVICE)
+    
     train_results = engine.train(model=model,
                 train_dataloader=train_dataloader,
                 val_dataloader=test_dataloader,
