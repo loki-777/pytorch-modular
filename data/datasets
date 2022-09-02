@@ -1,0 +1,15 @@
+data folder structure:
+data/
+----Dataset/
+--------train/
+------------images/
+------------ground_truth/
+--------validation/
+------------images/
+------------ground_truth/
+--------test/
+------------images/
+------------ground_truth/
+
+Our dataset: https://drive.google.com/file/d/1EwkZE5sPuLV-Xnx1iwqoRukqxiGtYKkA/view?usp=sharing
+MallesNet: https://drive.google.com/file/d/1_iCfYKTPkGnt8QNJPtk7Jt7k8uFZpXmr/view?usp=sharing
