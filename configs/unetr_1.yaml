@@ -1,8 +1,8 @@
 dataset_name: "MallesNet"
 model_name: "UNETR"
 device: "cuda:0"
-log: True
-test_or_train: True
+log: False
+test_or_train: False
 model_parameters: {
   "in_channels": 1,
   "out_channels": 1,
@@ -20,26 +20,28 @@ model_parameters: {
 }
 training_parameters: {
   "train_val_split": 0.8,
-  "learning_rate": 0.0001,
-  "optimizer": "AdamW",
+  "learning_rate": 0.001,
+  "optimizer": "Adam",
   "activation": "ReLU",
-  "loss_fn": "DiceCELoss",
-  "dropout": 0.2,
-  "num_epochs": 1000,
-  "batch_size": 16,
+  "loss_fn": "MSELoss",
+  "dropout": 0,
+  "num_epochs": 250,
+  "batch_size": 1,
 }
 testing_parameters: {
-  "model_path":,
+  "model_path": "../saved_models/unetr1.pth",
   "loss_fn":,
   "metric":,
+  "save": True,
+  "data": "test"
 }
 save_model: {
-  "save": True,
-  "model_name":"unetr_mallesnet_diceloss.pth",
+  "save": False,
+  "model_name":"unetr1.pth",
 }
 wandb: {
   "project": "unetr1",
   "fields":["train_loss", "val_loss"],
-  "name": "UNETR-MallesNet-1000epochs"
+  "name": "UNETR-MallesNet-250epochs"
 }
 
