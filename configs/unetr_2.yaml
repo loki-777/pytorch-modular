@@ -1,4 +1,4 @@
-dataset_name: "MallesNet"
+dataset_name: "NerveDataset"
 model_name: "UNETR"
 device: "cuda:0"
 log: True
@@ -20,26 +20,26 @@ model_parameters: {
 }
 training_parameters: {
   "train_val_split": 0.8,
-  "learning_rate": 0.0001,
-  "optimizer": "AdamW",
+  "learning_rate": 0.001,
+  "optimizer": "Adam",
   "activation": "ReLU",
-  "loss_fn": "DiceCELoss",
-  "dropout": 0.2,
-  "num_epochs": 1000,
+  "loss_fn": "MSELoss",
+  "dropout": 0,
+  "num_epochs": 150,
   "batch_size": 16,
 }
 testing_parameters: {
-  "model_path":,
+  "model_path": "../saved_models/unetr1.pth",
   "loss_fn":,
   "metric":,
 }
 save_model: {
   "save": True,
-  "model_name":"unetr_mallesnet_diceloss.pth",
+  "model_name":"unetr2.pth",
 }
 wandb: {
-  "project": "unetr1",
+  "project": "unetr2",
   "fields":["train_loss", "val_loss"],
-  "name": "UNETR-MallesNet-1000epochs"
+  "name": "UNETR-NerveDataset-250epochs"
 }
 
