@@ -232,7 +232,8 @@ class Transformer(nn.Module):
 class ViTB16(nn.Module):
     def __init__(self, *, img_size, patch_size, dim=768, depth=12, heads=12, mlp_dim=3072, pool = 'cls', channels = 1, dim_head = 64, dropout = 0., emb_dropout = 0.):
         super().__init__()
-        image_height, image_width = pair(img_size)
+        image_height = img_size[0]
+        image_width = img_size[1]
         patch_height, patch_width = pair(patch_size)
 
         assert image_height % patch_height == 0 and image_width % patch_width == 0, 'Image dimensions must be divisible by the patch size.'
@@ -301,7 +302,7 @@ class MAE_decoder(nn.Module):
         self.mask_token = nn.Parameter(torch.randn(decoder_dim))
         self.decoder = Transformer(dim = decoder_dim, depth = decoder_depth, heads = decoder_heads, dim_head = decoder_dim_head, mlp_dim = decoder_dim * 4)
         self.decoder_pos_emb = nn.Embedding(num_patches, decoder_dim)
-        self.to_pixels = nn.Linear(decoder_dim, pixel_values_per_patch)
+        self.to_pixels = nn.Sequential(nn.OrderedDict[nn.Linear(decoder_dim, pixel_values_per_patch), nn.Sigmoid()])
 
     def forward(self, img):
         device = img.device
@@ -382,7 +383,7 @@ class JointModel(nn.Module):
             ViTB16=self.encoder,
             in_channels=in_channels,
             out_channels=out_channels,
-            img_size=img_size
+            img_size=list(img_size)
         )
         self.reconstruction_decoder = MAE_decoder(
             encoder=self.encoder,
