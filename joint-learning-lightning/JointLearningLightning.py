@@ -6,40 +6,30 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 import monai
 from SupportModels import JointModel
-from utils import LinearWarmupCosineAnnealingLR
+from utils import LinearWarmupCosineAnnealingLR, load_config
 import data_setup
 import os
 import datetime
-import wandb
+import wandb, sys
 
-config = {
-        "DATASET": "NerveDataset",
-        "MODEL": "JointLearningModel",
-        "LEARNING_RATE": 0.0001,
-        "WARMUP_EPOCHS": 50,
-        "OPTIMIZER": "AdamW",
-        "BATCH_SIZE": 8,
-        "LOSS_FN": "DiceCELoss + LAMBDA*MSELoss",
-        "IMG_SIZE": (320, 336),
-        "IN_CHANNELS": 1,
-        "PATCH_SIZE": 16,
-        "DECODER_DIM": 768,
-        "MASKING_RATIO": 0.75,
-        "OUT_CHANNELS": 1,
-        "LAMBDA": 1,
-        "NUM_EPOCHS": 200,
-        "SCHEDULER": "LinearWarmupCosineAnnealingLR"
-        }
+# SETTING UP CONFIGS
+
+CONFIG_PATH = "configs/"
+config_name = sys.argv[1]
+
+config = load_config(CONFIG_PATH, config_name)
+
+
+# WANDB INIT
 
 wandb.init(
-    project="joint-learning",
-    config=config,
-    name="JointLearning-NerveDataset-200epochs-"+str(datetime.datetime.now())
+    project=config["wandb"]["project"],
+    config=config["wandb"]["config"],
+    name= config["wandb"]["run_name"] + "-" + str(datetime.datetime.now())
 )
 
-resume = False
 
-
+# LIGHTNING MODEL
 class JointModelLightning(pl.LightningModule):
 
     def __init__(self,
@@ -115,43 +105,42 @@ class JointModelLightning(pl.LightningModule):
 
 
 
-
-
+# DEFINE DATALOADERS
 
 train_dataloader, test_dataloader, val_dataloader = data_setup.create_dataloaders(
-        dataset= os.path.join("../data", config["DATASET"]),
-        batch_size=config["BATCH_SIZE"],
-        img_size=config["IMG_SIZE"]
+        dataset= os.path.join("../data", config["dataset_name"]),
+        batch_size=config["training_parameters"]["batch_size"],
+        img_size=config["model_parameters"]["img_size"],
+        train_transforms=config["training_parameters"]["transformation"]
     )
 
 
-
+# INITIALISE MODEL
 
 model = JointModelLightning(in_channels=config["IN_CHANNELS"],
-    img_size=config["IMG_SIZE"],
-    patch_size=config["PATCH_SIZE"],
-    decoder_dim=config["DECODER_DIM"],
-    masking_ratio=config["MASKING_RATIO"],
-    out_channels=config["OUT_CHANNELS"],
-    LAMBDA=config["LAMBDA"],
-    NUM_EPOCHS=config["NUM_EPOCHS"],
-    LEARNING_RATE=config["LEARNING_RATE"],
-    WARMUP_EPOCHS=config["WARMUP_EPOCHS"]
+    img_size=config["model_parameters"]["img_size"],
+    patch_size=config["model_parameters"]["patch_size"],
+    decoder_dim=config["model_parameters"]["decoder_dim"],
+    masking_ratio=config["model_parameters"]["masking_ratio"],
+    out_channels=config["model_parameters"]["out_channels"],
+    LAMBDA=config["training_parameters"]["lambda"],
+    NUM_EPOCHS=config["training_parameters"]["num_epochs"],
+    LEARNING_RATE=config["training_parameters"]["learning_rate"],
+    WARMUP_EPOCHS=config["training_parameters"]["warmup_epochs"]
     )
 
-
-
+# TRAINING
 
 NO_GPUS = torch.cuda.device_count()
+resume = config["training_parameters"]["resum_training"]
 
-
-
-
-checkpoint_callback = ModelCheckpoint(dirpath="./checkpoints",save_last=True, every_n_epochs=20, save_on_train_epoch_end = True, filename='{epoch}-{train_loss:.4f}')
-trainer = pl.Trainer(devices=NO_GPUS, accelerator="gpu", strategy="ddp", max_epochs=config["NUM_EPOCHS"], callbacks=[checkpoint_callback])
+checkpoint_callback = ModelCheckpoint(dirpath="./checkpoints",save_last=True, every_n_epochs=config["save_model"]["every_n_epoch"], save_on_train_epoch_end = True, filename='{epoch}-{train_loss:.4f}')
 
 if(resume == True):
-    trainer = pl.Trainer(devices=NO_GPUS, accelerator="gpu", strategy="ddp", max_epochs=config["NUM_EPOCHS"], resume_from_checkpoint='./checkpoints/last.ckpt', callbacks=[checkpoint_callback])
+    trainer = pl.Trainer(devices=NO_GPUS, accelerator="gpu", strategy="ddp", max_epochs=config["training_parameters"]["num_epochs"], resume_from_checkpoint='./checkpoints/last.ckpt', callbacks=[checkpoint_callback])
+else:
+    trainer = pl.Trainer(devices=NO_GPUS, accelerator="gpu", strategy="ddp", max_epochs=config["training_parameters"]["num_epochs"], callbacks=[checkpoint_callback])
 
 trainer.fit(model=model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
+
 wandb.finish()
