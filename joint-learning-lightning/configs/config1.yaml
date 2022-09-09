@@ -1,1 +1,64 @@
+dataset_name: "NerveDataset"
+model_name: "JointModel"
+device: "cuda:0"
+log: False
+test_or_train: True
+model_parameters: {
+  "in_channels": 1,
+  "out_channels": 1,
+  "img_size": (320, 336),
+  "patch_size": 16,
+  "decoder_dim": 768,
+  "masking_ratio": 0.75
+}
+training_parameters: {
+  "train_val_split": 0.8,
+  "learning_rate": 0.0001,
+  "optimizer": "AdamW",
+  "warmup_epochs": 50,
+  "activation": "Sigmoid",
+  "loss_fn": "DiceCELoss + LAMBDA*MSELoss",
+  "dropout": 0,
+  "num_epochs": 200,
+  "batch_size": 8,
+  "lambda": 1,
+  "lr_scheduler": "LinearWarmupCosineAnnealingLR",
+  "resume_training": False,
+  "transformation": [ { "name":"horizontal_flip"}, {"name":"crop"}, {"name":"random_rotate"}]
+}
+testing_parameters: {
+  "model_path": "../saved_models/joint-learning1.pth",
+  "loss_fn":,
+  "metric":,
+  "save":,
+  "data":
+}
+save_model: {
+  "save": False,
+  "every_n_epoch": 10,
+  "save_best_val_loss_model": True,
+  "save_best_val_acc_model": True
 
+}
+wandb: {
+  "project": "joint-learning",
+  "config": {
+        "DATASET": "NerveDataset",
+        "MODEL": "JointLearningModel",
+        "LEARNING_RATE": 0.0001,
+        "WARMUP_EPOCHS": 50,
+        "OPTIMIZER": "AdamW",
+        "BATCH_SIZE": 8,
+        "LOSS_FN": "DiceCELoss + LAMBDA*MSELoss",
+        "IMG_SIZE": (320, 336),
+        "IN_CHANNELS": 1,
+        "PATCH_SIZE": 16,
+        "DECODER_DIM": 768,
+        "MASKING_RATIO": 0.75,
+        "OUT_CHANNELS": 1,
+        "LAMBDA": 1,
+        "NUM_EPOCHS": 200,
+        "SCHEDULER": "LinearWarmupCosineAnnealingLR"
+        },
+  "run_name": "JointLearning-NerveDataset-1000epochs"
+}
