@@ -21,6 +21,8 @@ from monai.networks.blocks.unetr_block import UnetrBasicBlock, UnetrPrUpBlock, U
 from monai.networks.nets.vit import ViT
 from monai.utils import ensure_tuple_rep
 
+from collections import OrderedDict
+
 def pair(t):
     return t if isinstance(t, tuple) else (t, t)
 
@@ -302,7 +304,8 @@ class MAE_decoder(nn.Module):
         self.mask_token = nn.Parameter(torch.randn(decoder_dim))
         self.decoder = Transformer(dim = decoder_dim, depth = decoder_depth, heads = decoder_heads, dim_head = decoder_dim_head, mlp_dim = decoder_dim * 4)
         self.decoder_pos_emb = nn.Embedding(num_patches, decoder_dim)
-        self.to_pixels = nn.Sequential(nn.OrderedDict[nn.Linear(decoder_dim, pixel_values_per_patch), nn.Sigmoid()])
+        self.to_pixels = nn.Linear(decoder_dim, pixel_values_per_patch)
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, img):
         device = img.device
@@ -357,7 +360,7 @@ class MAE_decoder(nn.Module):
         # splice out the mask tokens and project to pixel values
 
         mask_tokens = decoded_tokens[:, :num_masked]
-        pred_pixel_values = self.to_pixels(mask_tokens)
+        pred_pixel_values = self.sigmoid(self.to_pixels(mask_tokens))
         recon_loss = F.mse_loss(pred_pixel_values, masked_patches)
         return recon_loss, pred_pixel_values
 
