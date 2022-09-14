@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 import monai
 from Models import JointModel
-from utils import LinearWarmupCosineAnnealingLR, load_config
+from utils import LinearWarmupCosineAnnealingLR, load_config, save_model
 import data_setup
 import os
 import datetime
@@ -50,7 +50,9 @@ class JointModelLightning(pl.LightningModule):
 
         NUM_EPOCHS,
         LEARNING_RATE,
-        WARMUP_EPOCHS
+        WARMUP_EPOCHS,
+        save,
+        every_n_epoch
         ):
         super().__init__()
         
@@ -68,6 +70,13 @@ class JointModelLightning(pl.LightningModule):
         self.LOSS_FN = monai.losses.DiceCELoss(include_background=False, smooth_nr=0, smooth_dr=1e-6)
         self.OPTIMIZER = torch.optim.AdamW(self.model.parameters(), lr=self.LEARNING_RATE)
         self.SCHEDULER = LinearWarmupCosineAnnealingLR(self.OPTIMIZER, warmup_epochs=self.WARMUP_EPOCHS, max_epochs=self.NUM_EPOCHS)
+
+        self.global_min_validation_loss = 1000000
+        self.global_max_validation_acc = 0
+        self.save = save
+        self.every_n_epoch = every_n_epoch
+        self.best_val_loss_epoch = 0
+        self.best_val_acc_epoch = 0
 
     def forward(self, X):
         return self.model(X)
@@ -114,9 +123,20 @@ class JointModelLightning(pl.LightningModule):
             val_segmentation_loss = sum(output['val_segmentation_loss'].mean() for output in gathered) / len(outputs)
             val_reconstruction_loss = sum(output['val_reconstruction_loss'].mean() for output in gathered) / len(outputs)
             val_segmentation_accuracy = sum(output['val_segmentation_accuracy'].mean() for output in gathered) / len(outputs)
+            if(self.current_epoch % self.every_n_epoch == 0):
+                if(self.save == True):
+                    save_model(self.model, "saved_models/checkpoints", f"epoch-{self.current_epoch}.pth")
+            if(val_loss < self.global_min_validation_loss):
+                save_model(self.model, "saved_models", "best_val_loss.pth")
+                self.global_min_validation_loss = val_loss
+                self.best_val_loss_epoch = self.current_epoch
+
+            if(val_segmentation_accuracy < self.global_max_validation_acc):
+                save_model(self.model, "saved_models", "best_val_acc.pth")
+                self.global_max_validation_acc = val_segmentation_accuracy
+                self.best_val_acc_epoch = self.current_epoch
+            
             print(f"Epoch: {self.current_epoch} | val_loss: {val_loss.item()} |  val_segmentation_loss: {val_segmentation_loss.item()} |  val_reconstruction_loss: {val_reconstruction_loss.item()}")
-            #self.log("val_loss", val_loss, on_epoch=True, prog_bar=True)
-            #self.log("val_segmentation_accuracy", val_segmentation_accuracy, on_epoch=True, prog_bar=True)
             wandb.log({"val_epoch": self.current_epoch, "val_loss": val_loss, "val_segmentation_loss": val_segmentation_loss, "val_reconstruction_loss": val_reconstruction_loss, "val_segmentation_accuracy": val_segmentation_accuracy})
 
 
@@ -141,7 +161,9 @@ model = JointModelLightning(in_channels=config["IN_CHANNELS"],
     LAMBDA=config["training_parameters"]["lambda"],
     NUM_EPOCHS=config["training_parameters"]["num_epochs"],
     LEARNING_RATE=config["training_parameters"]["learning_rate"],
-    WARMUP_EPOCHS=config["training_parameters"]["warmup_epochs"]
+    WARMUP_EPOCHS=config["training_parameters"]["warmup_epochs"],
+    save=config["training_parameters"]["save"],
+    every_n_epoch=config["training_parameters"]["every_n_epoch"]
     )
 
 # TRAINING
@@ -159,5 +181,7 @@ else:
     max_epochs=config["training_parameters"]["num_epochs"])
 
 trainer.fit(model=model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
+
+print(f"BEST VAL ACC EPOCH: {model.best_val_acc_epoch} || BEST VAL LOSS EPOCH: {model.best_val_loss_epoch}")
 
 wandb.finish()
