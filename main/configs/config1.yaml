@@ -1,12 +1,10 @@
 dataset_name: "NerveDataset"
 model_name: "JointModel"
-device: "cuda:0"
-log: False
-test_or_train: True
 model_parameters: {
   "in_channels": 1,
   "out_channels": 1,
-  "img_size": (320, 336),
+  "img_size_w": 320,
+  "img_size_h": 336,
   "patch_size": 16,
   "decoder_dim": 768,
   "masking_ratio": 0.75
@@ -27,20 +25,6 @@ training_parameters: {
   "save": True,
   "every_n_epoch": 10
 }
-testing_parameters: {
-  "model_path": "../saved_models/joint-learning1.pth",
-  "loss_fn":,
-  "metric":,
-  "save":,
-  "data":
-}
-save_model: {
-  "save": False,
-  "every_n_epoch": 10,
-  "save_best_val_loss_model": True,
-  "save_best_val_acc_model": True
-
-}
 wandb: {
   "project": "joint-learning",
   "config": {
@@ -51,7 +35,7 @@ wandb: {
         "OPTIMIZER": "AdamW",
         "BATCH_SIZE": 8,
         "LOSS_FN": "DiceCELoss + LAMBDA*MSELoss",
-        "IMG_SIZE": (320, 336),
+        "IMG_SIZE": "(320, 336)",
         "IN_CHANNELS": 1,
         "PATCH_SIZE": 16,
         "DECODER_DIM": 768,
@@ -61,5 +45,5 @@ wandb: {
         "NUM_EPOCHS": 200,
         "SCHEDULER": "LinearWarmupCosineAnnealingLR"
         },
-  "run_name": "JointLearning-NerveDataset-1000epochs"
+  "run_name": "JointLearning-NerveDataset-200epochs"
 }
