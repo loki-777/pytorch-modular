@@ -70,6 +70,7 @@ class JointModelLightning(pl.LightningModule):
         self.LOSS_FN = monai.losses.DiceCELoss(include_background=False, smooth_nr=0, smooth_dr=1e-6)
         self.OPTIMIZER = torch.optim.AdamW(self.model.parameters(), lr=self.LEARNING_RATE)
         self.SCHEDULER = LinearWarmupCosineAnnealingLR(self.OPTIMIZER, warmup_epochs=self.WARMUP_EPOCHS, max_epochs=self.NUM_EPOCHS)
+        self.dice_metric = monai.metrics.DiceMetric()
 
         self.global_min_validation_loss = 1000000
         self.global_max_validation_acc = 0
@@ -131,7 +132,7 @@ class JointModelLightning(pl.LightningModule):
                 self.global_min_validation_loss = val_loss
                 self.best_val_loss_epoch = self.current_epoch
 
-            if(val_segmentation_accuracy < self.global_max_validation_acc):
+            if(val_segmentation_accuracy > self.global_max_validation_acc):
                 save_model(self.model, "saved_models", "best_val_acc.pth")
                 self.global_max_validation_acc = val_segmentation_accuracy
                 self.best_val_acc_epoch = self.current_epoch
@@ -146,14 +147,15 @@ class JointModelLightning(pl.LightningModule):
 train_dataloader, test_dataloader, val_dataloader = data_setup.create_dataloaders(
         dataset= os.path.join("../data", config["dataset_name"]),
         batch_size=config["training_parameters"]["batch_size"],
-        img_size=config["model_parameters"]["img_size"]
+        img_size=(config["model_parameters"]["img_size_w"], config["model_parameters"]["img_size_h"])
     )
 
 
 # INITIALISE MODEL
 
-model = JointModelLightning(in_channels=config["IN_CHANNELS"],
-    img_size=config["model_parameters"]["img_size"],
+model = JointModelLightning(
+    in_channels=config["model_parameters"]["in_channels"],
+    img_size=(config["model_parameters"]["img_size_w"], config["model_parameters"]["img_size_h"]),
     patch_size=config["model_parameters"]["patch_size"],
     decoder_dim=config["model_parameters"]["decoder_dim"],
     masking_ratio=config["model_parameters"]["masking_ratio"],
