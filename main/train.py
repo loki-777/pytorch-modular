@@ -78,6 +78,7 @@ class JointModelLightning(pl.LightningModule):
         self.every_n_epoch = every_n_epoch
         self.best_val_loss_epoch = 0
         self.best_val_acc_epoch = 0
+        self.save_hyperparameters()
 
     def forward(self, X):
         return self.model(X)
