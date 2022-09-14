@@ -24,7 +24,8 @@ training_parameters: {
   "lambda": 1,
   "lr_scheduler": "LinearWarmupCosineAnnealingLR",
   "resume_training": False,
-  "transformation": [ { "name":"horizontal_flip"}, {"name":"crop"}, {"name":"random_rotate"}]
+  "save": True,
+  "every_n_epoch": 10
 }
 testing_parameters: {
   "model_path": "../saved_models/joint-learning1.pth",
