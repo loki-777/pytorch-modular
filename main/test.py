@@ -37,7 +37,9 @@ def test_step(model: torch.nn.Module,
     with torch.inference_mode():
         for img_path in img_path_list:
             X = cv.imread(os.path.join(img_input_dir, img_path),0)
-            y = cv.imread(os.path.join(mask_input_dir, img_path),0)
+            y = np.zeros(X.shape, dtype='uint8')
+            if(os.path.exists(os.path.join(mask_input_dir, img_path))):
+                y = cv.imread(os.path.join(mask_input_dir, img_path),0)
             X = cv.resize(X, (img_size[1], img_size[0]), interpolation = cv.INTER_NEAREST)
             y = cv.resize(y, (img_size[1], img_size[0]), interpolation = cv.INTER_NEAREST)
             X = np.expand_dims(X, (0,1))/255
@@ -129,8 +131,8 @@ model.load_state_dict(torch.load("Baseline/best_val_acc.pth"), strict=False)
 
 
 test(model=model, 
-img_input_dir="../data/NerveDataset/test/images",
-mask_input_dir="../data/NerveDataset/test/ground_truth",
+img_input_dir="../data/NerveDataset/train/images",
+mask_input_dir="../data/NerveDataset/train/ground_truth",
 img_size=(320, 336),
 output_dir="../outputs",
 threshold=0.5,
