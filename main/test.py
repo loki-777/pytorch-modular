@@ -1,12 +1,12 @@
 import torch
+import torch.nn as nn
 import os
-import wandb
 from tqdm.auto import tqdm
 from typing import Dict, List, Tuple
 import cv2 as cv
 import numpy as np
 from sklearn.metrics import f1_score
-from train import JointModelLightning
+from model import JointModelLightning
 
 def test_step(model: torch.nn.Module, 
               img_input_dir,
@@ -40,8 +40,8 @@ def test_step(model: torch.nn.Module,
             y = cv.imread(os.path.join(mask_input_dir, img_path),0)
             X = cv.resize(X, (img_size[1], img_size[0]), interpolation = cv.INTER_NEAREST)
             y = cv.resize(y, (img_size[1], img_size[0]), interpolation = cv.INTER_NEAREST)
-            X = np.expand_dims(X, 0)/255
-            y = np.expand_dims(y, 0)/255
+            X = np.expand_dims(X, (0,1))/255
+            y = np.expand_dims(y, (0,1))/255
             X = torch.Tensor(X)
             y = torch.Tensor(y)
             X, y = X.to(device), y.to(device)
@@ -52,16 +52,21 @@ def test_step(model: torch.nn.Module,
             segmentation_pred = torch.squeeze(segmentation_pred).cpu().numpy()
             recon_pred = torch.squeeze(recon_pred).cpu().numpy()
             y = torch.squeeze(y).cpu().numpy()
+            y = (y > 0) + 0
+            y_f = y.flatten()
+            segmentation_pred_f = segmentation_pred.flatten()
+            print(np.unique(y))
+            print(np.unique(segmentation_pred))
 
-            test_loss += f1_score(y, segmentation_pred)
+            test_loss += f1_score(y_f, segmentation_pred_f)
             overall_recon_loss += recon_loss
 
             if(save):
                 segmentation_pred *= 255
                 recon_pred *= 255
 
-                cv.imwrite(os.path.join(output_dir,'reconstruction'), recon_pred)
-                cv.imwrite(os.path.join(output_dir,'masks'), segmentation_pred)
+                cv.imwrite(os.path.join(output_dir,'reconstruction',img_path), recon_pred)
+                cv.imwrite(os.path.join(output_dir,'masks',img_path), segmentation_pred)
     
     return test_loss / len(img_path_list), recon_loss / len(img_path_list)
 
@@ -105,8 +110,7 @@ config = {
         "SCHEDULER": "LinearWarmupCosineAnnealingLR"
         }
 
-model = JointModelLightning.load_from_checkpoint(
-    "checkpoints/epoch=199-step=259600.ckpt",
+model = JointModelLightning(
     in_channels=config["IN_CHANNELS"],
     img_size=config["IMG_SIZE"],
     patch_size=config["PATCH_SIZE"],
@@ -116,8 +120,13 @@ model = JointModelLightning.load_from_checkpoint(
     LAMBDA=config["LAMBDA"],
     NUM_EPOCHS=config["NUM_EPOCHS"],
     LEARNING_RATE=config["LEARNING_RATE"],
-    WARMUP_EPOCHS=config["WARMUP_EPOCHS"]
+    WARMUP_EPOCHS=config["WARMUP_EPOCHS"],
+    save=True,
+    every_n_epoch=20
     )
+
+model.load_state_dict(torch.load("Baseline/best_val_acc.pth"), strict=False)
+
 
 test(model=model, 
 img_input_dir="../data/NerveDataset/test/images",
