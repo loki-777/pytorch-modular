@@ -35,6 +35,7 @@ class UNETR_decoder(nn.Module):
         out_channels: int,
         img_size: Union[Sequence[int], int],
         feature_size: int = 16,
+        patch_size=16,
         hidden_size: int = 768,
         norm_name: Union[Tuple, str] = "instance",
         conv_block: bool = True,
@@ -45,7 +46,7 @@ class UNETR_decoder(nn.Module):
 
         self.num_layers = 12
         img_size = ensure_tuple_rep(img_size, spatial_dims)
-        self.patch_size = ensure_tuple_rep(16, spatial_dims)
+        self.patch_size = ensure_tuple_rep(patch_size, spatial_dims)
         self.feat_size = tuple(img_d // p_d for img_d, p_d in zip(img_size, self.patch_size))
         self.hidden_size = hidden_size
         self.classification = False
@@ -132,7 +133,7 @@ class UNETR_decoder(nn.Module):
             norm_name=norm_name,
             res_block=res_block,
         )
-        self.out = UnetOutBlock(spatial_dims=spatial_dims, in_channels=feature_size, out_channels=out_channels)
+        self.out = UnetOutBlock(spatial_dims=spatial_dims, in_channels=feature_size, out_channels=out_channels) if list(self.patch_size)[0] == 16 else UnetOutBlock(spatial_dims=spatial_dims, in_channels=feature_size*2, out_channels=out_channels)
         self.proj_axes = (0, spatial_dims + 1) + tuple(d + 1 for d in range(spatial_dims))
         self.proj_view_shape = list(self.feat_size) + [self.hidden_size]
 
@@ -155,8 +156,11 @@ class UNETR_decoder(nn.Module):
         dec4 = self.proj_feat(x)
         dec3 = self.decoder5(dec4, enc4)
         dec2 = self.decoder4(dec3, enc3)
-        dec1 = self.decoder3(dec2, enc2)
-        out = self.decoder2(dec1, enc1)
+        if list(self.patch_size)[0] == 16:
+            dec1 = self.decoder3(dec2, enc2)
+            out = self.decoder2(dec1, enc1)
+        else:
+            out = self.decoder3(dec2, enc2)
         return self.sigmoid(self.out(out))
 
 # MAE ENCODER
@@ -307,6 +311,37 @@ class MAE_decoder(nn.Module):
         self.to_pixels = nn.Linear(decoder_dim, pixel_values_per_patch)
         self.sigmoid = nn.Sigmoid()
 
+    def reconstruct_image(self, patches, model_input, masked_indices=None, pred_pixel_values=None, patch_size=16):
+        patches = patches.detach()
+
+        masked_indices_in = masked_indices is not None
+        predicted_pixels_in = pred_pixel_values is not None
+
+        if masked_indices_in:
+            masked_indices = masked_indices.detach()
+
+        if predicted_pixels_in:
+            pred_pixel_values = pred_pixel_values.detach()
+
+        patch_width = patch_height = patch_size
+        reconstructed_image = patches.clone()
+
+        if masked_indices_in or predicted_pixels_in:
+            for i in range(reconstructed_image.shape[0]):
+                if masked_indices_in and predicted_pixels_in:
+                    reconstructed_image[i, masked_indices[i]] = pred_pixel_values[i, :].float()
+                elif masked_indices_in:
+                    reconstructed_image[i, masked_indices[i]] = 0
+
+        invert_patch = Rearrange('b (h w) (p1 p2 c) -> b c (h p1) (w p2)', w=int(model_input.shape[3] / patch_width),
+                                 h=int(model_input.shape[2] / patch_height), c=model_input.shape[1],
+                                 p1=patch_height, p2=patch_width)
+
+        reconstructed_image = invert_patch(reconstructed_image)
+
+        reconstructed_image = reconstructed_image.cpu().numpy().transpose(0, 2, 3, 1)
+        return reconstructed_image.transpose(0, 3, 2, 1)
+
     def forward(self, img):
         device = img.device
 
@@ -362,7 +397,8 @@ class MAE_decoder(nn.Module):
         mask_tokens = decoded_tokens[:, :num_masked]
         pred_pixel_values = self.sigmoid(self.to_pixels(mask_tokens))
         recon_loss = F.mse_loss(pred_pixel_values, masked_patches)
-        return recon_loss, pred_pixel_values
+        predictions = self.reconstruct_image(patches, img, masked_indices=masked_indices, pred_pixel_values=pred_pixel_values, patch_size=16)
+        return recon_loss, predictions
 
 class JointModel(nn.Module):
     def __init__(self,
@@ -386,7 +422,8 @@ class JointModel(nn.Module):
             ViTB16=self.encoder,
             in_channels=in_channels,
             out_channels=out_channels,
-            img_size=list(img_size)
+            img_size=list(img_size),
+            patch_size=patch_size
         )
         self.reconstruction_decoder = MAE_decoder(
             encoder=self.encoder,
@@ -395,7 +432,7 @@ class JointModel(nn.Module):
         )
 
     def forward(self, X):
-        segmentation_output = self.segmentation_decoder(X)
         recon_loss, reconstruction_output = self.reconstruction_decoder(X)
+        segmentation_output = self.segmentation_decoder(X)
 
         return segmentation_output, recon_loss, reconstruction_output
