@@ -12,16 +12,7 @@ import data_setup
 import os
 import datetime
 import sys
-import wandb
 import GPUtil
-
-# SETTING UP CONFIGS
-
-CONFIG_PATH = "configs/"
-config_name = sys.argv[1]
-
-config = load_config(CONFIG_PATH, config_name)
-wandb_logger = WandbLogger(name=config["wandb"]["run_name"] + "-" + str(datetime.datetime.now()), project=config["wandb"]["project"], log_model="all")
 
 # LIGHTNING MODEL
 class JointModelLightning(pl.LightningModule):
@@ -104,68 +95,3 @@ class JointModelLightning(pl.LightningModule):
         self.log("val_reconstruction_loss", recon_score, sync_dist=True)
         self.log("val_acc", val_segmentation_accuracy, sync_dist=True)
         return val_loss
-
-
-
-NO_GPUS = torch.cuda.device_count()
-
-
-# DEFINE DATALOADERS
-
-train_dataloader, test_dataloader, val_dataloader = data_setup.create_dataloaders(
-        dataset= os.path.join("../data", config["dataset_name"]),
-        batch_size=config["training_parameters"]["batch_size"],
-        img_size=(config["model_parameters"]["img_size_w"], config["model_parameters"]["img_size_h"]),
-        num_workers=4*NO_GPUS,
-        augmentation=config["training_parameters"]["augmentation"])
-
-
-# INITIALISE MODEL
-
-model = JointModelLightning(
-    in_channels=config["model_parameters"]["in_channels"],
-    img_size=(config["model_parameters"]["img_size_w"], config["model_parameters"]["img_size_h"]),
-    patch_size=config["model_parameters"]["patch_size"],
-    decoder_dim=config["model_parameters"]["decoder_dim"],
-    masking_ratio=config["model_parameters"]["masking_ratio"],
-    out_channels=config["model_parameters"]["out_channels"],
-    LAMBDA=config["training_parameters"]["lambda"],
-    NUM_EPOCHS=config["training_parameters"]["num_epochs"],
-    LEARNING_RATE=config["training_parameters"]["learning_rate"],
-    WARMUP_EPOCHS=config["training_parameters"]["warmup_epochs"],
-    WEIGHT_DECAY=config["training_parameters"]["weight_decay"]
-    )
-
-
-
-overall_checkpoint_callback = ModelCheckpoint(
-        dirpath="saved_models/checkpoints/",
-        filename="{epoch}",
-        monitor="loss",
-        save_top_k=-1,
-        mode="min")
-
-val_loss_checkpoint_callback = ModelCheckpoint(
-        dirpath="saved_models",
-        filename="best_val_loss-{epoch}",
-        monitor="val_loss",
-        save_top_k=1,
-        mode="min")
-
-val_acc_checkpoint_callback = ModelCheckpoint(
-        dirpath="saved_models",
-        filename="best_val_acc-{epoch}",
-        monitor="val_acc",
-        save_top_k=1,
-        mode="max")
-
-
-trainer = pl.Trainer(devices=NO_GPUS, 
-        accelerator="gpu", 
-        strategy="ddp", 
-        logger=wandb_logger, 
-        callbacks=[overall_checkpoint_callback, val_loss_checkpoint_callback, val_acc_checkpoint_callback], 
-        max_epochs=config["training_parameters"]["num_epochs"])
-
-trainer.fit(model=model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
-

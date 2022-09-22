@@ -7,6 +7,8 @@ import cv2 as cv
 import numpy as np
 from sklearn.metrics import f1_score
 from model import JointModelLightning
+from PIL import Image 
+import PIL 
 
 def test_step(model: torch.nn.Module, 
               img_input_dir,
@@ -67,8 +69,11 @@ def test_step(model: torch.nn.Module,
                 segmentation_pred *= 255
                 recon_pred *= 255
 
-                cv.imwrite(os.path.join(output_dir,'reconstruction',img_path), recon_pred)
-                cv.imwrite(os.path.join(output_dir,'masks',img_path), segmentation_pred)
+                recon_pred=Image.fromarray(recon_pred)
+                segmentation_pred=Image.fromarray(segmentation_pred)
+
+                recon_pred.save(os.path.join(output_dir,'reconstruction',img_path[:-3],'.png'), dpi=(300, 300))
+                segmentation_pred.save(os.path.join(output_dir,'masks',img_path[:-3],'.png'), dpi=(300, 300))
     
     return test_loss / len(img_path_list), recon_loss / len(img_path_list)
 
@@ -93,42 +98,26 @@ def test(model: torch.nn.Module,
         f"mean_test_loss: {test_loss[0]:.4f}" + "|" + f"mean_reconstruction_loss: {test_loss[1]:.4f}"
     )
 
-config = {
-        "DATASET": "NerveDataset",
-        "MODEL": "JointLearningModel",
-        "LEARNING_RATE": 0.0001,
-        "WARMUP_EPOCHS": 50,
-        "OPTIMIZER": "AdamW",
-        "BATCH_SIZE": 8,
-        "LOSS_FN": "DiceCELoss + LAMBDA*MSELoss",
-        "IMG_SIZE": (320, 336),
-        "IN_CHANNELS": 1,
-        "PATCH_SIZE": 16,
-        "DECODER_DIM": 768,
-        "MASKING_RATIO": 0.75,
-        "OUT_CHANNELS": 1,
-        "LAMBDA": 1,
-        "NUM_EPOCHS": 200,
-        "SCHEDULER": "LinearWarmupCosineAnnealingLR"
-        }
+CONFIG_PATH = "configs/"
+config_name = sys.argv[1]
+
+config = load_config(CONFIG_PATH, config_name)
 
 model = JointModelLightning(
-    in_channels=config["IN_CHANNELS"],
-    img_size=config["IMG_SIZE"],
-    patch_size=config["PATCH_SIZE"],
-    decoder_dim=config["DECODER_DIM"],
-    masking_ratio=config["MASKING_RATIO"],
-    out_channels=config["OUT_CHANNELS"],
-    LAMBDA=config["LAMBDA"],
-    NUM_EPOCHS=config["NUM_EPOCHS"],
-    LEARNING_RATE=config["LEARNING_RATE"],
-    WARMUP_EPOCHS=config["WARMUP_EPOCHS"],
-    save=True,
-    every_n_epoch=20
-    )
+        in_channels=config["model_parameters"]["in_channels"],
+        img_size=(config["model_parameters"]["img_size_w"], config["model_parameters"]["img_size_h"]),
+        patch_size=config["model_parameters"]["patch_size"],
+        decoder_dim=config["model_parameters"]["decoder_dim"],
+        masking_ratio=config["model_parameters"]["masking_ratio"],
+        out_channels=config["model_parameters"]["out_channels"],
+        LAMBDA=config["training_parameters"]["lambda"],
+        NUM_EPOCHS=config["training_parameters"]["num_epochs"],
+        LEARNING_RATE=config["training_parameters"]["learning_rate"],
+        WARMUP_EPOCHS=config["training_parameters"]["warmup_epochs"],
+        WEIGHT_DECAY=config["training_parameters"]["weight_decay"]
+        )
 
 model.load_state_dict(torch.load("Baseline/best_val_acc.pth"), strict=False)
-
 
 test(model=model, 
 img_input_dir="../data/NerveDataset/train/images",
