@@ -73,7 +73,7 @@ class JointModelLightning(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.LEARNING_RATE, weight_decay = self.WEIGHT_DECAY)
         scheduler =  LinearWarmupCosineAnnealingLR(self.OPTIMIZER, warmup_epochs=self.WARMUP_EPOCHS, max_epochs=self.NUM_EPOCHS)
-        return [optimizer, scheduler]
+        return [optimizer], [scheduler]
 
     def training_step(self, batch, batch_idx):
         X, y = batch
