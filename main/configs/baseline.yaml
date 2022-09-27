@@ -1,4 +1,5 @@
 dataset_name: "NerveDataset"
+aug_dataset_name: "NerveDatasetAug"
 model_name: "JointModel"
 model_parameters: {
   "in_channels": 1,
@@ -10,27 +11,29 @@ model_parameters: {
   "masking_ratio": 0.75
 }
 training_parameters: {
-  "learning_rate": 0.0001,
+  "learning_rate": 0.0005,
   "optimizer": "AdamW",
   "warmup_epochs": 50,
   "activation": "Sigmoid",
   "loss_fn": "DiceCELoss + LAMBDA*MSELoss",
-  "dropout": 0,
+  "dropout": 0.2,
   "num_epochs": 200,
-  "batch_size": 8,
-  "lambda": 1,
+  "batch_size": 6,
+  "lambda": 0.2,
   "lr_scheduler": "LinearWarmupCosineAnnealingLR",
-  "augmentation": "transform"
+  "augmentation": "addition",
+  "weight_decay": 0.05,
+  "aug_batch_size": 2
 }
 wandb: {
-  "project": "hyperparameter-tuning",
+  "project": "Experiments",
   "config": {
         "DATASET": "NerveDataset",
         "MODEL": "JointLearningModel",
-        "LEARNING_RATE": 0.0001,
+        "LEARNING_RATE": 0.0005,
         "WARMUP_EPOCHS": 50,
         "OPTIMIZER": "AdamW",
-        "BATCH_SIZE": 8,
+        "BATCH_SIZE": "6+2",
         "LOSS_FN": "DiceCELoss + LAMBDA*MSELoss",
         "IMG_SIZE": "(320, 336)",
         "IN_CHANNELS": 1,
@@ -38,9 +41,10 @@ wandb: {
         "DECODER_DIM": 768,
         "MASKING_RATIO": 0.75,
         "OUT_CHANNELS": 1,
-        "LAMBDA": 1,
+        "LAMBDA": 0.2,
         "NUM_EPOCHS": 200,
-        "SCHEDULER": "LinearWarmupCosineAnnealingLR"
+        "SCHEDULER": "LinearWarmupCosineAnnealingLR",
+        "WEIGHT_DECAY": 0.05
         },
-  "run_name": "BaselineModel-200epochs"
+  "run_name": "addition-augmentation"
 }
