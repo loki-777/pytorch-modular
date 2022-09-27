@@ -2,6 +2,7 @@ from json import decoder
 import torch
 from torch import nn
 from torch.nn import functional as F
+from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
@@ -12,8 +13,6 @@ import data_setup
 import os
 import datetime
 import sys
-import wandb
-import GPUtil
 
 # SETTING UP CONFIGS
 
@@ -21,7 +20,7 @@ CONFIG_PATH = "configs/"
 config_name = sys.argv[1]
 
 config = load_config(CONFIG_PATH, config_name)
-wandb_logger = WandbLogger(name=config["wandb"]["run_name"] + "-" + str(datetime.datetime.now()), project=config["wandb"]["project"], log_model="all")
+wandb_logger = WandbLogger(name=config["wandb"]["run_name"] + "-" + str(datetime.datetime.now()), project=config["wandb"]["project"], log_model="false")
 
 # LIGHTNING MODEL
 class JointModelLightning(pl.LightningModule):
@@ -44,9 +43,10 @@ class JointModelLightning(pl.LightningModule):
 
         NUM_EPOCHS,
         LEARNING_RATE,
-        WARMUP_EPOCHS, 
-        WEIGHT_DECAY
-        ):
+        WARMUP_EPOCHS,
+
+        weight_decay=0.01,
+        aug_dataloader=None):
         super().__init__()
 
         self.model = JointModel(in_channels=in_channels,
@@ -57,28 +57,38 @@ class JointModelLightning(pl.LightningModule):
             out_channels=out_channels)
 
         self.LAMBDA = LAMBDA
-        self.WEIGHT_DECAY = WEIGHT_DECAY
         self.NUM_EPOCHS = NUM_EPOCHS
         self.LEARNING_RATE = LEARNING_RATE
         self.WARMUP_EPOCHS = WARMUP_EPOCHS
         self.LOSS_FN = monai.losses.DiceCELoss(smooth_nr=0, smooth_dr=1e-6)
-        self.OPTIMIZER = torch.optim.AdamW(self.model.parameters(), lr=self.LEARNING_RATE)
-        self.SCHEDULER = LinearWarmupCosineAnnealingLR(self.OPTIMIZER, warmup_epochs=self.WARMUP_EPOCHS, max_epochs=self.NUM_EPOCHS)
         self.dice_metric = monai.metrics.DiceMetric()
-	self.save_hyperparameters()
+        self.weight_decay = weight_decay
+        self.aug_dataloader = aug_dataloader
+        self.save_hyperparameters()
 
     def forward(self, X):
         return self.model(X)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.LEARNING_RATE, weight_decay = self.WEIGHT_DECAY)
-        scheduler =  LinearWarmupCosineAnnealingLR(optimizer, warmup_epochs=self.WARMUP_EPOCHS, max_epochs=self.NUM_EPOCHS)
-        return [optimizer], [scheduler]
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.LEARNING_RATE, weight_decay=self.weight_decay)
+        scheduler = LinearWarmupCosineAnnealingLR(optimizer, warmup_epochs=self.WARMUP_EPOCHS, max_epochs=self.NUM_EPOCHS)
+        return {"optimizer": optimizer, "lr_scheduler": scheduler}
 
     def training_step(self, batch, batch_idx):
         X, y = batch
         X = X.type(torch.cuda.FloatTensor)
         y = y.type(torch.cuda.FloatTensor)
+        print("before", X.shape, y.shape)
+
+        # augmentation dataloader
+        if(self.aug_dataloader is not None):
+            X_aug, y_aug = next(iter(self.aug_dataloader))
+            X_aug = X_aug.type(torch.cuda.FloatTensor)
+            y_aug = y_aug.type(torch.cuda.FloatTensor)
+            X = torch.cat((X, X_aug), 0)
+            y = torch.cat((y, y_aug), 0)
+
+        print("after", X.shape, y.shape)
         segmentation_pred, recon_score, recon_pred = self.model(X)
         segmentation_loss = self.LOSS_FN(segmentation_pred, y)
         loss = segmentation_loss + self.LAMBDA*recon_score
@@ -116,8 +126,23 @@ train_dataloader, test_dataloader, val_dataloader = data_setup.create_dataloader
         dataset= os.path.join("../data", config["dataset_name"]),
         batch_size=config["training_parameters"]["batch_size"],
         img_size=(config["model_parameters"]["img_size_w"], config["model_parameters"]["img_size_h"]),
-        num_workers=4*NO_GPUS,
+        num_workers=8,
         augmentation=config["training_parameters"]["augmentation"])
+
+
+# AUGMENTATION DATALOADER
+
+aug_dataloader = None
+if(config["training_parameters"]["augmentation"] == "addition"):
+    aug_data = data_setup.CustomDatasetClass(os.path.join("../data", config["aug_dataset_name"]), (config["model_parameters"]["img_size_w"], config["model_parameters"]["img_size_h"]))
+    aug_dataloader = DataLoader(
+        aug_data,
+        batch_size=config["training_parameters"]["aug_batch_size"],
+        shuffle=True,
+        num_workers=8,
+        pin_memory=True,
+    )
+
 
 
 # INITIALISE MODEL
@@ -133,8 +158,8 @@ model = JointModelLightning(
     NUM_EPOCHS=config["training_parameters"]["num_epochs"],
     LEARNING_RATE=config["training_parameters"]["learning_rate"],
     WARMUP_EPOCHS=config["training_parameters"]["warmup_epochs"],
-    WEIGHT_DECAY=config["training_parameters"]["weight_decay"]
-    )
+    weight_decay=config["training_parameters"]["weight_decay"],
+    aug_dataloader=aug_dataloader)
 
 
 
