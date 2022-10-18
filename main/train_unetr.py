@@ -7,9 +7,9 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 import monai
-from Models.JointModel import JointModel
+from Models.UNETR import UNETR
 from utils import LinearWarmupCosineAnnealingLR, load_config, save_model
-import data_setup
+import data_setup_vid as data_setup
 import os
 import datetime
 import sys
@@ -23,7 +23,7 @@ config = load_config(CONFIG_PATH, config_name)
 wandb_logger = WandbLogger(name=config["wandb"]["run_name"] + "-" + str(datetime.datetime.now()), project=config["wandb"]["project"], log_model="false")
 
 # LIGHTNING MODEL
-class JointModelLightning(pl.LightningModule):
+class UNETRLightning(pl.LightningModule):
 
     def __init__(self,
         # encoder params
@@ -31,16 +31,9 @@ class JointModelLightning(pl.LightningModule):
         img_size,
         patch_size,
         
-        # reconstruction params
-        decoder_dim,
-        masking_ratio,
-        
         # segmentation decoder params
         out_channels,
         
-        #loss function params
-        LAMBDA,
-
         NUM_EPOCHS,
         LEARNING_RATE,
         WARMUP_EPOCHS,
@@ -49,14 +42,11 @@ class JointModelLightning(pl.LightningModule):
         aug_dataloader=None):
         super().__init__()
 
-        self.model = JointModel(in_channels=in_channels,
+        self.model = UNETR(in_channels=in_channels,
             img_size=img_size,
             patch_size=patch_size,
-            decoder_dim=decoder_dim,
-            masking_ratio=masking_ratio,
             out_channels=out_channels)
 
-        self.LAMBDA = LAMBDA
         self.NUM_EPOCHS = NUM_EPOCHS
         self.LEARNING_RATE = LEARNING_RATE
         self.WARMUP_EPOCHS = WARMUP_EPOCHS
@@ -89,29 +79,23 @@ class JointModelLightning(pl.LightningModule):
             X = torch.cat((X, X_aug), 0)
             y = torch.cat((y, y_aug), 0)
 
-        segmentation_pred, recon_score, recon_pred = self.model(X)
-        segmentation_loss = self.LOSS_FN((self.Tanh(segmentation_pred)+1)/2, y)
-        loss = segmentation_loss + self.LAMBDA*recon_score
+        segmentation_pred = self.model(X)
+        loss = self.LOSS_FN((self.Tanh(segmentation_pred)+1)/2, y)
         self.log("loss", loss, sync_dist=True)
-        self.log("segmentation_loss", segmentation_loss, sync_dist=True)
-        self.log("reconstruction_loss", recon_score, sync_dist=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         X, y = batch
         X = X.type(torch.cuda.FloatTensor)
         y = y.type(torch.cuda.FloatTensor)
-        segmentation_pred, recon_score, recon_pred = self.model(X)
-        segmentation_loss = self.LOSS_FN((self.Tanh(segmentation_pred)+1)/2, y)
-        val_loss = segmentation_loss + self.LAMBDA*recon_score
+        segmentation_pred = self.model(X)
+        val_loss = self.LOSS_FN((self.Tanh(segmentation_pred)+1)/2, y)
         segmentation_pred = (segmentation_pred>0.5)
         y = y > 0.5
         self.dice_metric(y_pred=segmentation_pred, y=y)
         val_segmentation_accuracy = self.dice_metric.aggregate().item()
         self.dice_metric.reset()
         self.log("val_loss", val_loss, sync_dist=True)
-        self.log("val_segmentation_loss", segmentation_loss, sync_dist=True)
-        self.log("val_reconstruction_loss", recon_score, sync_dist=True)
         self.log("val_acc", val_segmentation_accuracy, sync_dist=True)
         return val_loss
 
@@ -147,14 +131,11 @@ if(config["training_parameters"]["augmentation"] == "addition"):
 
 # INITIALISE MODEL
 
-model = JointModelLightning(
+model = UNETRLightning(
     in_channels=config["model_parameters"]["in_channels"],
     img_size=(config["model_parameters"]["img_size_w"], config["model_parameters"]["img_size_h"]),
     patch_size=config["model_parameters"]["patch_size"],
-    decoder_dim=config["model_parameters"]["decoder_dim"],
-    masking_ratio=config["model_parameters"]["masking_ratio"],
     out_channels=config["model_parameters"]["out_channels"],
-    LAMBDA=config["training_parameters"]["lambda"],
     NUM_EPOCHS=config["training_parameters"]["num_epochs"],
     LEARNING_RATE=config["training_parameters"]["learning_rate"],
     WARMUP_EPOCHS=config["training_parameters"]["warmup_epochs"],

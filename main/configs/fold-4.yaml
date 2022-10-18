@@ -1,9 +1,9 @@
-dataset_name: "NerveDataset"
-aug_dataset_name: "NerveDatasetAug"
-model_name: "JointModel"
+dataset_name: "temp"
+aug_dataset_name: "None"
+model_name: "UNETR"
 model_parameters: {
-  "in_channels": 1,
-  "out_channels": 1,
+  "in_channels": 10,
+  "out_channels": 10,
   "img_size_w": 320,
   "img_size_h": 336,
   "patch_size": 16,
@@ -14,27 +14,27 @@ training_parameters: {
   "learning_rate": 0.0005,
   "optimizer": "AdamW",
   "warmup_epochs": 50,
-  "activation": "Sigmoid",
-  "loss_fn": "DiceCELoss + LAMBDA*MSELoss",
+  "activation": "TanH",
+  "loss_fn": "DiceCELoss",
   "dropout": 0.2,
   "num_epochs": 200,
-  "batch_size": 6,
-  "lambda": 0.2,
+  "batch_size": 1,
+  "lambda": 1,
   "lr_scheduler": "LinearWarmupCosineAnnealingLR",
-  "augmentation": "transform",
+  "augmentation": "None",
   "weight_decay": 0.05,
-  "aug_batch_size": 2
+  "aug_batch_size": 0
 }
 wandb: {
-  "project": "Experiments",
+  "project": "TestingVideoVersions",
   "config": {
         "DATASET": "NerveDataset",
-        "MODEL": "JointLearningModel",
+        "MODEL": "UNETR",
         "LEARNING_RATE": 0.0005,
         "WARMUP_EPOCHS": 50,
         "OPTIMIZER": "AdamW",
-        "BATCH_SIZE": "8",
-        "LOSS_FN": "DiceCELoss + LAMBDA*MSELoss + MSELoss",
+        "BATCH_SIZE": "1",
+        "LOSS_FN": "DiceCELoss",
         "IMG_SIZE": "(320, 336)",
         "IN_CHANNELS": 1,
         "PATCH_SIZE": 16,
@@ -46,5 +46,5 @@ wandb: {
         "SCHEDULER": "LinearWarmupCosineAnnealingLR",
         "WEIGHT_DECAY": 0.05
         },
-  "run_name": "Expermenting with combined loss and tanh"
+  "run_name": "Attempts..."
 }
